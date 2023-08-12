@@ -47,16 +47,18 @@ HIDController.prototype.connectLight = function(group, name, setter) {
 
 
 
-const KontrolZ1 = function() {
-    this.controller = new HIDController();
+class TraktorZ1Class {
+    constructor() {
+        this.controller = new HIDController();
 
-    this.controller.softTakeoverAll();
+        this.controller.softTakeoverAll();
 
-    this.mode = "default";
+        this.mode = "default";
+        this.knobs = {};
+    }
 
     // region CONTROLS
-
-    this.registerInputPackets = function() {
+    registerInputPackets() {
         const packet = new HIDPacket("control", 0x1);
 
         for (let c = 1; c < 3; c++) {
@@ -82,9 +84,9 @@ const KontrolZ1 = function() {
         button("2_button_fx", 0x8);
 
         this.controller.registerInputPacket(packet);
-    };
+    }
 
-    this.registerCallbacks = function() {
+    registerCallbacks() {
         HIDDebug("Registering HID callbacks");
 
         const controller = this.controller;
@@ -136,13 +138,11 @@ const KontrolZ1 = function() {
         controller.setCallback("control", "hid", "cue_mix", this.knob);
         this.linkKnob("default", "crossfader", "[Master]", "crossfader");
         controller.setCallback("control", "hid", "crossfader", this.knob);
-    };
+    }
 
     // endregion
-
     // region LIGHTS
-
-    this.registerOutputPackets = function() {
+    registerOutputPackets() {
         const packet = new HIDPacket("lights", 0x80);
 
         for (let c = 1; c < 3; c++) {
@@ -156,90 +156,91 @@ const KontrolZ1 = function() {
         packet.addOutput("hid", "mode", 19, "B");
 
         this.controller.registerOutputPacket(packet);
-    };
-
-    this.brightness = 0x7f;
-    this.brightnessRange = 1.0 / 7;
-    this.refreshVolumeLights = function(value, group) {
-        const packet = this.controller.getLightsPacket();
-        const channel = group.substr(8, 1);
-        for (let i = 0; i < 7; i++) {
-            const br = Math.max(Math.min((value - i * this.brightnessRange) * 7, 1), 0) * this.brightness;
-            packet.getField("hid", "ch" + channel + "_meter_segment" + (i + 1)).value = br;
-        }
-        this.controller.sendLightsUpdate();
-    };
+    }
 
     // endregion
 
-};
+    init(id) {
+        this.id = id;
 
-KontrolZ1.init = function(id) {
-    KontrolZ1.id = id;
+        this.registerInputPackets();
+        this.registerOutputPackets();
+        this.registerCallbacks();
 
-    KontrolZ1.registerInputPackets();
-    KontrolZ1.registerOutputPackets();
-    KontrolZ1.registerCallbacks();
 
-    for (let c = 1; c < 3; c++) {
-        engine.makeConnection("[Channel" + c + "]", "VuMeter", KontrolZ1.refreshVolumeLights);
-        KontrolZ1.controller.connectLight("[Channel" + c + "]", "pfl", function(value, packet, group) {
+        this.brightness = 0x7f;
+        this.brightnessRange = 1.0 / 7;
+        this.refreshVolumeLights = function(value, group) {
+            const packet = this.controller.getLightsPacket();
             const channel = group.substr(8, 1);
-            packet.getField("hid", channel + "_headphone").value = value * 0x7F;
-        });
-        KontrolZ1.controller.connectLight("[QuickEffectRack1_[Channel" + c + "]_Effect1]", "enabled", function(value, packet, group) {
-            const channel = group.substr(26, 1);
-            packet.getField("hid", channel + "_button_fx_red").value = value * 0x7F;
-            packet.getField("hid", channel + "_button_fx_blue").value = value * 0x7F;
-        });
+            for (let i = 0; i < 7; i++) {
+                const br = Math.max(Math.min((value - i * this.brightnessRange) * 7, 1), 0) * this.brightness;
+                packet.getField("hid", "ch" + channel + "_meter_segment" + (i + 1)).value = br;
+            }
+            this.controller.sendLightsUpdate();
+        };
+
+
+        for (let c = 1; c < 3; c++) {
+            engine.makeConnection("[Channel" + c + "]", "VuMeter", this.refreshVolumeLights);
+            this.controller.connectLight("[Channel" + c + "]", "pfl", function(value, packet, group) {
+                const channel = group.substr(8, 1);
+                packet.getField("hid", channel + "_headphone").value = value * 0x7F;
+            });
+            this.controller.connectLight("[QuickEffectRack1_[Channel" + c + "]_Effect1]", "enabled", function(value, packet, group) {
+                const channel = group.substr(26, 1);
+                packet.getField("hid", channel + "_button_fx_red").value = value * 0x7F;
+                packet.getField("hid", channel + "_button_fx_blue").value = value * 0x7F;
+            });
+        }
+
+        // print("NI Traktor Kontrol Z1 " + this.id + " initialized!");
     }
 
-    // print("NI Traktor Kontrol Z1 " + KontrolZ1.id + " initialized!");
-};
 
+    // region knobs
 
-// region knobs
-
-KontrolZ1.knobs = {};
-KontrolZ1.linkKnob = function(mode, knob, group, name) {
-    if (!(mode in KontrolZ1.knobs)) { KontrolZ1.knobs[mode] = {}; }
-    KontrolZ1.knobs[mode][knob] = {
-        "mode": mode,
-        "knob": knob,
-        "group": group,
-        "name": name,
-    };
-};
-
-KontrolZ1.control = function(control, field) {
-    if (control.callback !== undefined) {
-        control.callback(control, field);
-        return;
+    linkKnob(mode, knob, group, name) {
+        if (!(mode in this.knobs)) { this.knobs[mode] = {}; }
+        this.knobs[mode][knob] = {
+            "mode": mode,
+            "knob": knob,
+            "group": group,
+            "name": name,
+        };
     }
-    engine.setParameter(control.group, control.name, field.value / 4096);
-};
 
-KontrolZ1.knob = function(field) {
-    const mode = KontrolZ1.knobs[KontrolZ1.mode];
-    if (mode === undefined) {
-        HIDDebug("Knob group not mapped in mode " + KontrolZ1.mode);
-        return;
+    control(control, field) {
+        if (control.callback !== undefined) {
+            control.callback(control, field);
+            return;
+        }
+        engine.setParameter(control.group, control.name, field.value / 4096);
     }
-    const knob = mode[field.name];
-    if (knob === undefined) {
-        HIDDebug("Fader " + field.name + " not mapped in " + KontrolZ1.mode);
-        return;
+
+    knob(field) {
+        const mode = this.knobs[this.mode];
+        if (mode === undefined) {
+            HIDDebug("Knob group not mapped in mode " + this.mode);
+            return;
+        }
+        const knob = mode[field.name];
+        if (knob === undefined) {
+            HIDDebug("Fader " + field.name + " not mapped in " + this.mode);
+            return;
+        }
+        return this.control(knob, field);
     }
-    return KontrolZ1.control(knob, field);
-};
+    // endregion
 
-// endregion
+    shutdown() {
+        this.controller.getLightsPacket().clearControls();
+        //print("NI Traktor Kontrol Z1 " + this.id + " shut down!");
+    }
 
-KontrolZ1.shutdown = function() {
-    KontrolZ1.controller.getLightsPacket().clearControls();
-    //print("NI Traktor Kontrol Z1 " + KontrolZ1.id + " shut down!");
-};
+    incomingData(data, length) {
+        this.controller.parsePacket(data, length);
+    }
+}
 
-KontrolZ1.incomingData = function(data, length) {
-    KontrolZ1.controller.parsePacket(data, length);
-};
+var TraktorZ1 = new TraktorZ1Class;  // eslint-disable-line no-var, no-unused-vars
