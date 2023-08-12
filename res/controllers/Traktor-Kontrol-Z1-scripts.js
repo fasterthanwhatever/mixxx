@@ -124,20 +124,20 @@ class TraktorZ1Class {
             this.linkKnob("default", channel + "_low", "[EqualizerRack1_[Channel" + channel + "]_Effect1]", "parameter1");
             this.linkKnob("default", channel + "_fx", "[QuickEffectRack1_[Channel" + channel + "]]", "super1");
 
-            controller.setCallback("control", "hid", channel + "_gain", this.knob);
-            controller.setCallback("control", "hid", channel + "_hi", this.knob);
-            controller.setCallback("control", "hid", channel + "_mid", this.knob);
-            controller.setCallback("control", "hid", channel + "_low", this.knob);
-            controller.setCallback("control", "hid", channel + "_fx", this.knob);
+            controller.setCallback("control", "hid", channel + "_gain", this.setKnob);
+            controller.setCallback("control", "hid", channel + "_hi", this.setKnob);
+            controller.setCallback("control", "hid", channel + "_mid", this.setKnob);
+            controller.setCallback("control", "hid", channel + "_low", this.setKnob);
+            controller.setCallback("control", "hid", channel + "_fx", this.setKnob);
 
             this.linkKnob("default", channel + "_vol", "[Channel" + channel + "]", "volume");
-            controller.setCallback("control", "hid", channel + "_vol", this.knob);
+            controller.setCallback("control", "hid", channel + "_vol", this.setKnob);
         }
 
         this.linkKnob("default", "cue_mix", "[Master]", "headMix");
-        controller.setCallback("control", "hid", "cue_mix", this.knob);
+        controller.setCallback("control", "hid", "cue_mix", this.setKnob);
         this.linkKnob("default", "crossfader", "[Master]", "crossfader");
-        controller.setCallback("control", "hid", "crossfader", this.knob);
+        controller.setCallback("control", "hid", "crossfader", this.setKnob);
     }
 
     // endregion
@@ -210,7 +210,7 @@ class TraktorZ1Class {
         };
     }
 
-    control(control, field) {
+    setControl(control, field) {
         if (control.callback !== undefined) {
             control.callback(control, field);
             return;
@@ -218,7 +218,7 @@ class TraktorZ1Class {
         engine.setParameter(control.group, control.name, field.value / 4096);
     }
 
-    knob(field) {
+    setKnob(field) {
         const mode = this.knobs[this.mode];
         if (mode === undefined) {
             HIDDebug("Knob group not mapped in mode " + this.mode);
@@ -229,7 +229,7 @@ class TraktorZ1Class {
             HIDDebug("Fader " + field.name + " not mapped in " + this.mode);
             return;
         }
-        return this.control(knob, field);
+        return this.setControl(knob, field);
     }
     // endregion
 
